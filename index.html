@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Trace — Linux Process & System Call Explorer</title>
+<style>
+:root{
+  --bg:#07110d; --panel:#0d1b15; --panel2:#10251b; --line:#1d3a2a;
+  --text:#e7f5eb; --muted:#91aa9a; --green:#58e391; --green2:#2dbb68;
+  --cyan:#55d8ff; --yellow:#ffd166; --red:#ff6b6b; --shadow:0 18px 50px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box} html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(circle at 70% -10%,#143d28 0,transparent 35%),var(--bg);
+color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+button{font:inherit}
+.app{display:flex;min-height:100vh}
+.sidebar{position:fixed;width:255px;top:0;bottom:0;padding:25px 18px;background:rgba(6,16,12,.92);border-right:1px solid var(--line);backdrop-filter:blur(15px);z-index:5}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:30px}.logo{width:42px;height:42px;border:1px solid var(--green);border-radius:12px;display:grid;place-items:center;color:var(--green);font-weight:900;font-size:20px;box-shadow:0 0 25px #2dbb6830}.brand h1{font-size:17px;margin:0}.brand small{color:var(--muted)}
+.nav{display:grid;gap:7px}.nav button{border:1px solid transparent;background:transparent;color:var(--muted);padding:11px 12px;border-radius:10px;text-align:left;cursor:pointer;transition:.2s}.nav button:hover,.nav button.active{background:#12281c;border-color:var(--line);color:var(--text)}.nav button.active{color:var(--green)}
+.sidefoot{position:absolute;bottom:20px;left:20px;right:20px;color:var(--muted);font-size:12px;line-height:1.6}
+.main{margin-left:255px;width:calc(100% - 255px);padding:30px 4vw 60px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}.crumb{color:var(--muted);font-size:13px}.status{border:1px solid #245239;background:#0d2418;color:var(--green);padding:7px 11px;border-radius:99px;font-size:12px}
+section{display:none;animation:fade .3s ease}section.active{display:block}@keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.hero{padding:38px;border:1px solid var(--line);border-radius:22px;background:linear-gradient(135deg,#10291c,#091711);box-shadow:var(--shadow);position:relative;overflow:hidden}.hero:after{content:"";position:absolute;width:280px;height:280px;border-radius:50%;right:-100px;top:-130px;background:#36d47712;box-shadow:0 0 100px #36d47712}
+.eyebrow{color:var(--green);font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase}.hero h2{font-size:clamp(32px,5vw,58px);line-height:1;margin:12px 0}.hero p{max-width:720px;color:var(--muted);font-size:16px;line-height:1.7}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:25px}
+.btn{border:1px solid var(--line);background:#10251a;color:var(--text);padding:10px 15px;border-radius:10px;cursor:pointer}.btn.primary{background:var(--green);color:#06100a;border-color:var(--green);font-weight:800}.btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px}.card h3{margin:0 0 7px}.card p{color:var(--muted);line-height:1.6;font-size:14px}.metric{font-size:30px;color:var(--green);font-weight:800}
+.title{display:flex;justify-content:space-between;align-items:end;margin:10px 0 18px}.title h2{margin:0;font-size:30px}.title p{color:var(--muted);margin:5px 0 0}
+.demo{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:18px}.demo-head{display:flex;justify-content:space-between;gap:15px;align-items:center}.demo-head h3{margin:0}.tag{font-size:11px;border:1px solid var(--line);color:var(--cyan);padding:5px 8px;border-radius:99px}
+.terminal{background:#030805;border:1px solid #173022;border-radius:13px;padding:16px;margin-top:15px;font-family:"SFMono-Regular",Consolas,monospace;font-size:13px;min-height:180px;white-space:pre-wrap;color:#b8eac8}.prompt{color:var(--green)}
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:20px 0}.node{padding:13px 16px;border:1px solid var(--line);background:#0a1710;border-radius:12px;text-align:center;min-width:115px}.node.on{border-color:var(--green);box-shadow:0 0 20px #58e39120;color:var(--green)}.arrow{color:var(--muted)}
+.progress{height:7px;background:#07110d;border-radius:99px;overflow:hidden;border:1px solid var(--line)}.bar{height:100%;width:0;background:var(--green);transition:.35s}
+.code{background:#030805;border:1px solid #173022;border-radius:12px;padding:17px;font-family:Consolas,monospace;font-size:13px;line-height:1.7;color:#c9e6d2;overflow:auto}.kw{color:#ff9f68}.fn{color:#55d8ff}.num{color:#ffd166}
+.procgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px}.stat{background:#0a1710;border:1px solid var(--line);padding:15px;border-radius:12px}.stat small{color:var(--muted)}.stat b{display:block;font-size:20px;margin-top:5px}
+.timeline{display:grid;gap:10px;margin-top:16px}.event{display:flex;gap:13px;padding:13px;background:#0a1710;border:1px solid var(--line);border-radius:10px}.dot{width:9px;height:9px;border-radius:50%;background:var(--green);margin-top:6px;flex:none}.event small{color:var(--muted)}
+.cards2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.full{grid-column:1/-1}
+.footer{text-align:center;color:#607b6b;font-size:12px;margin-top:40px}
+.toast{position:fixed;right:25px;bottom:25px;background:#12271b;border:1px solid var(--green);padding:12px 16px;border-radius:10px;opacity:0;transform:translateY(10px);pointer-events:none;transition:.25s;z-index:20}.toast.show{opacity:1;transform:none}
+@media(max-width:900px){.sidebar{width:75px;padding:18px 10px}.brand div:not(.logo),.nav button span,.sidefoot{display:none}.brand{justify-content:center}.main{margin-left:75px;width:calc(100% - 75px)}.grid,.procgrid,.cards2{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.main{padding:20px 14px}.grid,.procgrid,.cards2{grid-template-columns:1fr}.hero{padding:25px}.sidebar{width:62px}.main{margin-left:62px;width:calc(100% - 62px)}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand"><div class="logo">&gt;_</div><div><h1>CODE TRACE</h1><small>Linux Explorer</small></div></div>
+  <nav class="nav">
+    <button class="active" onclick="show('home',this)">◉ <span>Dashboard</span></button>
+    <button onclick="show('process',this)">⑂ <span>Process Creation</span></button>
+    <button onclick="show('signals',this)">⚡ <span>Signals</span></button>
+    <button onclick="show('syscalls',this)">▣ <span>System Calls</span></button>
+    <button onclick="show('proc',this)">▤ <span>/proc Monitor</span></button>
+    <button onclick="show('gdb',this)">⌕ <span>GDB Debugging</span></button>
+    <button onclick="show('strace',this)">≋ <span>Strace Explorer</span></button>
+    <button onclick="show('about',this)">ⓘ <span>Project Info</span></button>
+  </nav>
+  <div class="sidefoot">Operating Systems Mini Project<br>Interactive browser simulation</div>
+</aside>
+
+<main class="main">
+<div class="topbar"><div class="crumb">CODE TRACE / <span id="crumb">DASHBOARD</span></div><div class="status">● SYSTEM SIMULATION ONLINE</div></div>
+
+<section id="home" class="active">
+<div class="hero">
+<div class="eyebrow">Operating Systems • Interactive Lab</div>
+<h2>Inside Linux<br>Processes & System Calls</h2>
+<p>Explore how Linux creates processes, handles signals, performs file operations, exposes process information through <code>/proc</code>, and traces system calls. This website is a safe visual simulation of the original C project.</p>
+<div class="actions"><button class="btn primary" onclick="show('process',document.querySelectorAll('.nav button')[1])">Launch Process Lab →</button><button class="btn" onclick="show('syscalls',document.querySelectorAll('.nav button')[3])">Explore System Calls</button></div>
+</div>
+<div class="grid">
+<div class="card"><div class="metric">07</div><h3>Interactive Modules</h3><p>Process, signals, system calls, /proc, GDB, strace and project overview.</p></div>
+<div class="card"><div class="metric">C</div><h3>Original Technology</h3><p>Built around Linux concepts demonstrated by the companion C program.</p></div>
+<div class="card"><div class="metric">100%</div><h3>Browser Safe</h3><p>No real processes or system calls are executed on the visitor's machine.</p></div>
+</div>
+<div class="cards2">
+<div class="card"><h3>What you'll learn</h3><p>PID and PPID relationships, fork/exec/wait, signals, file descriptors, /proc, debugging and syscall tracing.</p></div>
+<div class="card"><h3>Project architecture</h3><p>Each module mirrors a function from the original C project and turns its output into an interactive visual demonstration.</p></div>
+</div>
+</section>
+
+<section id="process">
+<div class="title"><div><h2>Process Creation Lab</h2><p>Visualize <b>fork() → child → exec() → wait()</b></p></div></div>
+<div class="demo">
+<div class="demo-head"><h3>Process lifecycle</h3><span class="tag">fork / exec / wait</span></div>
+<div class="flow" id="pflow"><div class="node" id="p1">Parent<br><small>PID 4200</small></div><div class="arrow">→</div><div class="node" id="p2">fork()</div><div class="arrow">→</div><div class="node" id="p3">Child<br><small>PID 4201</small></div><div class="arrow">→</div><div class="node" id="p4">exec()</div><div class="arrow">→</div><div class="node" id="p5">wait()</div></div>
+<div class="progress"><div class="bar" id="pbar"></div></div><div class="actions"><button class="btn primary" onclick="runProcess()">▶ Run Demonstration</button><button class="btn" onclick="resetProcess()">Reset</button></div>
+<div class="terminal" id="pterm"><span class="prompt">$</span> Ready. Click "Run Demonstration" to simulate fork(), exec(), and wait().</div>
+</div>
+<div class="cards2"><div class="card"><h3>fork()</h3><p>Creates a new child process. The child receives a new PID while inheriting a copy of the parent's process context.</p></div><div class="card"><h3>exec()</h3><p>Replaces the current process image with another program. In the original project, the child executes <code>/bin/echo</code>.</p></div><div class="card full"><h3>waitpid()</h3><p>The parent waits for its child to finish, preventing the demonstration from moving forward until the child exits.</p></div></div>
+</section>
+
+<section id="signals">
+<div class="title"><div><h2>Signal Center</h2><p>See how a process sends and handles <code>SIGUSR1</code>.</p></div></div>
+<div class="demo">
+<div class="demo-head"><h3>Signal flow</h3><span class="tag">SIGUSR1</span></div>
+<div class="flow"><div class="node on" id="sigA">Process<br><small>PID 4200</small></div><div class="arrow">→ kill() →</div><div class="node" id="sigB">Signal Queue</div><div class="arrow">→</div><div class="node" id="sigC">Handler</div></div>
+<div class="terminal" id="sigterm"><span class="prompt">$</span> signal_demo() waiting for an event...</div>
+<div class="actions"><button class="btn primary" onclick="runSignal()">⚡ Send SIGUSR1</button><button class="btn" onclick="document.getElementById('sigterm').innerHTML='<span class=&quot;prompt&quot;>$</span> Handler reset. Waiting for SIGUSR1...'">Clear</button></div>
+</div>
+<div class="grid"><div class="card"><h3>1. Register</h3><p><code>signal(SIGUSR1, signal_handler)</code> associates the signal with a handler.</p></div><div class="card"><h3>2. Send</h3><p><code>kill(getpid(), SIGUSR1)</code> sends the signal to the current process.</p></div><div class="card"><h3>3. Handle</h3><p>The handler receives the signal number and prints a confirmation message.</p></div></div>
+</section>
+
+<section id="syscalls">
+<div class="title"><div><h2>System Call Lab</h2><p>Trace a complete file operation sequence.</p></div></div>
+<div class="demo">
+<div class="demo-head"><h3>File descriptor journey</h3><span class="tag">open / write / read / close</span></div>
+<div class="flow" id="sflow"><div class="node">Program</div><div class="arrow">→</div><div class="node" id="s1">open()</div><div class="arrow">→</div><div class="node" id="s2">write()</div><div class="arrow">→</div><div class="node" id="s3">read()</div><div class="arrow">→</div><div class="node" id="s4">close()</div></div>
+<div class="terminal" id="sterm"><span class="prompt">$</span> ./system_call_demo<br>Waiting to execute file system calls...</div>
+<div class="actions"><button class="btn primary" onclick="runSyscalls()">▶ Trace System Calls</button><button class="btn" onclick="resetSys()">Reset</button></div>
+</div>
+<div class="cards2"><div class="card"><h3>open()</h3><p>Creates/opens <code>trace_output.txt</code> and returns a file descriptor.</p></div><div class="card"><h3>write()</h3><p>Sends the demonstration message through the file descriptor to the file.</p></div><div class="card"><h3>read()</h3><p>Reads the stored bytes back into a memory buffer.</p></div><div class="card"><h3>close()</h3><p>Releases the file descriptor after the operation is complete.</p></div></div>
+</section>
+
+<section id="proc">
+<div class="title"><div><h2>/proc Process Monitor</h2><p>A browser simulation of information read from <code>/proc/&lt;pid&gt;/status</code>.</p></div></div>
+<div class="demo">
+<div class="demo-head"><h3>Current process snapshot</h3><span class="tag">Linux /proc</span></div>
+<div class="procgrid">
+<div class="stat"><small>Name</small><b id="procName">code-trace</b></div>
+<div class="stat"><small>PID</small><b id="procPid">4200</b></div>
+<div class="stat"><small>PPID</small><b>4012</b></div>
+<div class="stat"><small>State</small><b id="procState">Running</b></div>
+<div class="stat"><small>Threads</small><b id="procThreads">1</b></div>
+<div class="stat"><small>Platform</small><b>Linux</b></div>
+<div class="stat"><small>Memory</small><b>18.4 MB</b></div>
+<div class="stat"><small>UID</small><b>1000</b></div>
+</div>
+<div class="actions"><button class="btn primary" onclick="refreshProc()">↻ Refresh Snapshot</button></div>
+<div class="terminal" id="procterm"><span class="prompt">$</span> cat /proc/4200/status<br>Name:   code-trace<br>State:  R (running)<br>Pid:    4200<br>PPid:   4012<br>Threads: 1</div>
+</div>
+</section>
+
+<section id="gdb">
+<div class="title"><div><h2>GDB Debugging Lab</h2><p>Step through variables as if you were debugging the C program.</p></div></div>
+<div class="cards2">
+<div class="demo">
+<div class="demo-head"><h3>Source</h3><span class="tag">debugging_demo()</span></div>
+<div class="code"><span class="kw">int</span> a = <span class="num">20</span>;<br><span class="kw">int</span> b = <span class="num">5</span>;<br><span class="kw">int</span> result;<br><br>result = a / b;<br>printf(<span class="fn">"Result = %d"</span>, result);</div>
+</div>
+<div class="demo">
+<div class="demo-head"><h3>Debugger</h3><span class="tag" id="gdbtag">READY</span></div>
+<div class="terminal" id="gdbterm"><span class="prompt">(gdb)</span> break debugging_demo<br>Breakpoint 1 at demo.c:...<br><span class="prompt">(gdb)</span> run</div>
+<div class="actions"><button class="btn primary" onclick="gdbStep()">Next Step</button><button class="btn" onclick="gdbReset()">Restart</button></div>
+</div>
+</div>
+<div class="timeline" id="gdbtimeline"></div>
+</section>
+
+<section id="strace">
+<div class="title"><div><h2>Strace Explorer</h2><p>Understand how high-level C actions become Linux system calls.</p></div></div>
+<div class="demo">
+<div class="demo-head"><h3>Simulated syscall trace</h3><span class="tag">strace -e trace=file,process</span></div>
+<div class="terminal" id="straceterm"><span class="prompt">$</span> strace ./demo<br>Click "Run Trace" to generate a representative syscall sequence.</div>
+<div class="actions"><button class="btn primary" onclick="runStrace()">▶ Run Trace</button><button class="btn" onclick="document.getElementById('straceterm').innerHTML='<span class=&quot;prompt&quot;>$</span> Trace cleared.'">Clear</button></div>
+</div>
+<div class="grid"><div class="card"><h3>process</h3><p><code>clone()</code>, <code>execve()</code>, <code>wait4()</code> and related calls appear during process creation.</p></div><div class="card"><h3>file</h3><p><code>openat()</code>, <code>read()</code>, <code>write()</code> and <code>close()</code> reveal file activity.</p></div><div class="card"><h3>memory</h3><p>Startup often involves mappings and memory-management calls before your main function runs.</p></div></div>
+</section>
+
+<section id="about">
+<div class="title"><div><h2>Project Information</h2><p>Code Trace — Inside Linux Processes & System Calls</p></div></div>
+<div class="cards2">
+<div class="card"><h3>Objective</h3><p>Build an educational environment that makes core Linux process and system-call concepts easy to observe, explain and present during an Operating Systems project demonstration.</p></div>
+<div class="card"><h3>Original C modules</h3><p><code>process_demo()</code>, <code>signal_demo()</code>, <code>file_system_calls()</code>, <code>show_process_info()</code>, <code>debugging_demo()</code> and <code>strace_instructions()</code>.</p></div>
+<div class="card"><h3>Technologies</h3><p>HTML5 • CSS3 • JavaScript • Linux concepts • C system programming • GDB • strace</p></div>
+<div class="card"><h3>Important note</h3><p>This website intentionally simulates privileged OS behavior. A regular webpage cannot safely call Linux <code>fork()</code>, inspect the visitor's <code>/proc</code>, or run <code>strace</code> on their computer.</p></div>
+<div class="card full"><h3>Presentation flow</h3><p>Start at the Dashboard → run Process Creation → demonstrate Signals → trace File System Calls → inspect /proc → step through GDB → finish with Strace. This gives you a clean story from process creation to low-level system observation.</p></div>
+</div>
+</section>
+
+<div class="footer">CODE TRACE • Linux Process & System Call Explorer • Educational Project</div>
+</main>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const labels={home:'DASHBOARD',process:'PROCESS CREATION',signals:'SIGNALS',syscalls:'SYSTEM CALLS',proc:'/PROC MONITOR',gdb:'GDB DEBUGGING',strace:'STRACE EXPLORER',about:'PROJECT INFO'};
+function show(id,btn){
+ document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+ document.getElementById(id).classList.add('active');
+ document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
+ if(btn)btn.classList.add('active');
+ document.getElementById('crumb').textContent=labels[id];
+ window.scrollTo({top:0,behavior:'smooth'});
+}
+function toast(t){let x=document.getElementById('toast');x.textContent=t;x.classList.add('show');setTimeout(()=>x.classList.remove('show'),1800)}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+async function runProcess(){
+ const ids=['p1','p2','p3','p4','p5'], term=document.getElementById('pterm');
+ resetProcess(false); let msgs=[
+ 'Parent process started. PID=4200',
+ 'Calling fork() ... child process created.',
+ 'Child PID=4201, Parent PID=4200',
+ 'Child calls exec("/bin/echo", ...)',
+ 'Parent calls waitpid(4201, ...) and receives child exit status.'
+ ];
+ for(let i=0;i<ids.length;i++){document.getElementById(ids[i]).classList.add('on');document.getElementById('pbar').style.width=((i+1)/5*100)+'%';term.innerHTML+='\n<span class="prompt">$</span> '+msgs[i];await sleep(700)}
+ term.innerHTML+='\n<span class="prompt">$</span> Child process completed. Parent continues.';toast('Process lifecycle completed');
+}
+function resetProcess(clear=true){['p1','p2','p3','p4','p5'].forEach(x=>document.getElementById(x).classList.remove('on'));document.getElementById('pbar').style.width='0';if(clear)document.getElementById('pterm').innerHTML='<span class="prompt">$</span> Ready. Click "Run Demonstration" to simulate fork(), exec(), and wait().'}
+async function runSignal(){
+ let t=document.getElementById('sigterm');document.getElementById('sigB').classList.add('on');t.innerHTML='<span class="prompt">$</span> kill(4200, SIGUSR1)\nSignal queued...';await sleep(700);document.getElementById('sigC').classList.add('on');t.innerHTML+='\nSignal received: 10\nProcess handled the signal successfully.\nSignal demonstration completed.';toast('SIGUSR1 handled');
+}
+async function runSyscalls(){
+ resetSys();let ids=['s1','s2','s3','s4'], lines=['open("trace_output.txt", O_CREAT|O_WRONLY|O_TRUNC) = 3','write(3, "Code Trace - Linux System Call Demonstration", 44) = 44','read(3, buffer, 99) = 44','close(3) = 0'];
+let t=document.getElementById('sterm');t.innerHTML='<span class="prompt">$</span> ./system_call_demo';
+for(let i=0;i<4;i++){await sleep(650);document.getElementById(ids[i]).classList.add('on');t.innerHTML+='\n'+lines[i]}t.innerHTML+='\nFile content: Code Trace - Linux System Call Demonstration\nSystem call demonstration completed.';toast('System calls traced');
+}
+function resetSys(){['s1','s2','s3','s4'].forEach(x=>document.getElementById(x).classList.remove('on'));document.getElementById('sterm').innerHTML='<span class="prompt">$</span> ./system_call_demo<br>Waiting to execute file system calls...'}
+function refreshProc(){let pid=4200+Math.floor(Math.random()*80),thr=1+Math.floor(Math.random()*3);document.getElementById('procPid').textContent=pid;document.getElementById('procThreads').textContent=thr;document.getElementById('procterm').innerHTML='<span class="prompt">$</span> cat /proc/'+pid+'/status<br>Name:\tcode-trace<br>State:\tR (running)<br>Pid:\t'+pid+'<br>PPid:\t4012<br>Threads:\t'+thr;toast('Snapshot refreshed')}
+let gstep=0;function gdbStep(){let t=document.getElementById('gdbterm'),tl=document.getElementById('gdbtimeline');gstep++;let a=[['next','Line: int a = 20;','a = 20'],['next','Line: int b = 5;','b = 5'],['next','Line: result = a / b;','result = 4'],['print result','Result = 4','Program logic verified']];if(gstep<=4){t.innerHTML+='\n<span class="prompt">(gdb)</span> '+a[gstep-1][0]+'\n'+a[gstep-1][1];tl.innerHTML+='<div class="event"><div class="dot"></div><div><b>'+a[gstep-1][1]+'</b><br><small>'+a[gstep-1][2]+'</small></div></div>'}else{toast('Debug session complete')}}
+function gdbReset(){gstep=0;document.getElementById('gdbterm').innerHTML='<span class="prompt">(gdb)</span> break debugging_demo<br>Breakpoint 1 at demo.c:...<br><span class="prompt">(gdb)</span> run';document.getElementById('gdbtimeline').innerHTML=''}
+async function runStrace(){let t=document.getElementById('straceterm');t.innerHTML='<span class="prompt">$</span> strace ./demo';let lines=['execve("./demo", ["./demo"], ...) = 0','openat(AT_FDCWD, "trace_output.txt", O_WRONLY|O_CREAT|O_TRUNC, 0644) = 3','write(3, "Code Trace...", 44) = 44','close(3) = 0','clone(...) = 4201','wait4(4201, ...) = 4201','--- SIGUSR1 received ---','+++ exited with 0 +++'];for(const l of lines){await sleep(350);t.innerHTML+='\n'+l}toast('Strace simulation complete')}
+</script>
+</body>
+</html>
